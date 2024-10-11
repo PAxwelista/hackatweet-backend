@@ -1,15 +1,10 @@
-var express = require("express");
-var router = express.Router();
-
 const express = require('express');
 const router = express.Router();
 
-const Tweet = require('../models/Tweet'); 
-const User = require('../models/User');  
+//const Tweet = require('../models/Tweet'); 
+const User = require('../models/users');  
 const uid2 = require("uid2");
 const bcrypt = require("bcrypt");
-
-const User = require("../models/users");
 
 router.post("/signup",  (req, res) =>{
   if (req.body.firstname && req.body.username && req.body.password) {
