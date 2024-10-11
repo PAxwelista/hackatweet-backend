@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-const Tweet = require('../models/Tweet'); 
 const User = require('../models/users');  
 const uid2 = require("uid2");
 const bcrypt = require("bcrypt");
