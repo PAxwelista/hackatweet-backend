@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Tweet = require('../models/Tweet');
+const User = require("../models/users")
 
 // Middleware d'authentification
 const isAuthenticated = (req, res, next) => {
@@ -14,7 +15,7 @@ const isAuthenticated = (req, res, next) => {
 // Route pour obtenir tous les tweets
 router.get('/tweets', async (req, res) => {
   try {
-    const tweets = await Tweet.find().sort({ createdAt: -1 }); // Obtenir les tweets les plus récents en premier
+    const tweets = await Tweet.find().populate("author").sort({ createdAt: -1 }); // Obtenir les tweets les plus récents en premier
     res.status(200).json(tweets);
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la récupération des tweets' });
@@ -22,9 +23,8 @@ router.get('/tweets', async (req, res) => {
 });
 
 // Route pour ajouter un nouveau tweet
-router.post('/tweets', isAuthenticated, async (req, res) => {
-  const { content } = req.body;
-  const author = req.user.username; // Supposons que le middleware d'authentification ait défini req.user
+router.post('/tweets', async (req, res) => {
+  const { content,token} = req.body; 
 
   // Validation du contenu du tweet
   if (!content || content.trim() === '') {
@@ -36,10 +36,15 @@ router.post('/tweets', isAuthenticated, async (req, res) => {
   }
 
   try {
+
+    const user = await User.findOne({token:token})
+
+    
     const newTweet = new Tweet({
       content,
-      author,
-      createdAt: new Date()
+      author : user._id,
+      createdAt: new Date(),
+      hashtags : content.match(/#[a-z]*/gi)
     });
     await newTweet.save();
     res.status(201).json(newTweet); // Tweet créé avec succès
@@ -49,7 +54,7 @@ router.post('/tweets', isAuthenticated, async (req, res) => {
 });
 
 // Route pour supprimer un tweet (uniquement par l'auteur)
-router.delete('/tweets/:id', isAuthenticated, async (req, res) => {
+router.delete('/tweets/:id', async (req, res) => {
   const tweetId = req.params.id;
 
   try {
@@ -59,12 +64,7 @@ router.delete('/tweets/:id', isAuthenticated, async (req, res) => {
       return res.status(404).json({ error: 'Tweet non trouvé' });
     }
 
-    // Vérifier si l'utilisateur connecté est bien l'auteur du tweet
-    if (tweet.author !== req.user.username) {
-      return res.status(403).json({ error: 'Vous n\'avez pas la permission de supprimer ce tweet' });
-    }
-
-    await tweet.remove();
+    await Tweet.deleteOne({_id : tweetId});
     res.status(200).json({ message: 'Tweet supprimé avec succès' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de la suppression du tweet' });
@@ -72,32 +72,52 @@ router.delete('/tweets/:id', isAuthenticated, async (req, res) => {
 });
 
 // Route pour aimer un tweet
-router.post('/tweets/:id/like', isAuthenticated, async (req, res) => {
+router.post('/tweets/:id/:userToken', async (req, res) => {
   const tweetId = req.params.id;
+  const userToken = req.params.userToken;
 
   try {
     const tweet = await Tweet.findById(tweetId);
-
+   
     if (!tweet) {
       return res.status(404).json({ error: 'Tweet non trouvé' });
     }
+    const user = await User.findOne({token : userToken})
+    if (tweet.likes.some(e=>e.token === userToken)) {
 
-    if (tweet.likes.includes(req.user.username)) {
-      return res.status(400).json({ error: 'Vous avez déjà aimé ce tweet' });
+      
+      
+      const newTab = tweet.likes.filter(e=>e != user._id)
+  
+      Tweet.updateOne({_id : tweetId , likes : newTab}).then(data=>res.json({ result : true ,like : false}))
+    }
+    else{
+      
+      const newLikeTab = [...tweet.likes,user._id]
+      
+      Tweet.updateOne({_id : tweetId , likes : newLikeTab}).then(data=>res.json(data))
+      
     }
 
-    tweet.likes.push(req.user.username);
-    await tweet.save();
-
-    res.status(200).json({ message: 'Tweet aimé avec succès', tweet });
+  
+    
   } catch (err) {
     res.status(500).json({ error: 'Erreur lors de l\'ajout du like' });
   }
 });
 
+router.get("/isLiked/:id/:token", async (req,res)=>{
+  const tweet = await Tweet.findById(req.params.id).populate("author").populate("likes");
+
+  res.json({result : true , isLiked : tweet.likes.some(e=>e.token === req.params.token)})
+})
+
 // Route pour obtenir les tendances (hashtags et leur compte d'utilisation)
 router.get('/trends', async (req, res) => {
-  try {
+
+
+
+  try { 
     const trends = await Tweet.aggregate([
       { $unwind: '$hashtags' }, // Diviser les tweets pour obtenir chaque hashtag individuellement
       { $group: { _id: '$hashtags', count: { $sum: 1 } } }, // Regrouper par hashtag et compter
