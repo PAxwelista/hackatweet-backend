@@ -57,7 +57,6 @@ router.delete("/:id", async (req, res) => {
 });
 
 router.post("/:id/", async (req, res) => {
-  // encore des soucis avec celui la
   const tweetId = req.params.id;
   const userToken = req.body.userToken;
 
