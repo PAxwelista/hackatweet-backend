@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Tweet = require("../models/tweet");
+const Tweet = require("../models/tweets");
 const User = require("../models/users");
 
 router.get("/", async (req, res) => {
